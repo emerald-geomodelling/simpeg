@@ -30,7 +30,7 @@ import matplotlib as mpl
 from matplotlib import pyplot as plt
 from matplotlib.colors import LogNorm
 from discretize import TensorMesh
-from pymatsolver import PardisoSolver
+#from pymatsolver import PardisoSolver
 
 from SimPEG.utils import mkvc
 from SimPEG import (
@@ -233,8 +233,9 @@ starting_model = np.log(conductivity)
 
 simulation = fdem.Simulation1DLayeredStitched(
     survey=survey, thicknesses=thicknesses, sigmaMap=mapping,
-    solver=PardisoSolver
+#    solver=PardisoSolver
 )
+
 
 
 ########################################################################

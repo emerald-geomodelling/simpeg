@@ -37,7 +37,7 @@ from SimPEG.electromagnetics.utils.em1d_utils import plot_layer
 
 #plt.rcParams.update({'font.size': 16})
 
-write_output = True
+write_output = False
 
 # sphinx_gallery_thumbnail_number = 2
 
@@ -58,13 +58,17 @@ default_colors=['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b'
 frequencies = np.array([383, 1820, 3315, 8488, 40835, 133530], dtype=float)
 
 # EM bird geometry
-bird_hight=30
+bird_hight=40
 bird_length=10
 
 
 # model1:
-res1=[1000, 100, 100]  # resistivities mdoel1
-z1=[20, 50]           # layer depths model1
+res1=[1000, 100, 1000]  # resistivities mdoel1
+z1=[20, 25]           # layer depths model1
+
+# model2:
+res2=[1000, 1000, 1000]  # resistivities mdoel2
+z2=[60, 65]          # layer depths model2
 
 # %% Define a list of receivers. The real and imaginary components are defined
 # as separate receivers.
@@ -126,16 +130,24 @@ z1.insert(0,0)
 thicknesses1 = np.diff(np.array(z1))
 n_layer1 = len(thicknesses1) + 1
 
+z2.insert(0,0)
+thicknesses2 = np.diff(np.array(z2))
+n_layer2 = len(thicknesses2) + 1
+
 
 # physical property models (conductivity models)
 model1 = (1/res1[-1]) * np.ones(n_layer1)
 for n, r in enumerate(res1):
     model1[n] = 1/res1[n]
 
+model2 = (1/res2[-1]) * np.ones(n_layer2)
+for n, r in enumerate(res2):
+    model2[n] = 1/res2[n]
 
 
 # Define a mapping from model parameters to conductivities
 model_mapping1 = maps.IdentityMap(nP=n_layer1)
+model_mapping2 = maps.IdentityMap(nP=n_layer2)
 
 # %% ######################################################################
 # Define the Forward Simulation, Predict Data and Plot
@@ -153,37 +165,57 @@ model_mapping1 = maps.IdentityMap(nP=n_layer1)
 simulation1 = fdem.Simulation1DLayered(survey=survey,
                                        thicknesses=thicknesses1,
                                        sigmaMap=model_mapping1)
+simulation2 = fdem.Simulation1DLayered( survey=survey, 
+                                       thicknesses=thicknesses2, 
+                                       sigmaMap=model_mapping2)
 
 # Predict sounding data
-dpred = simulation1.dpred(model1)
-
-d1_real = np.abs(dpred[0 : len(dpred) : 2])
-d1_imag = np.abs(dpred[1 : len(dpred) : 2])
+dpred1 = simulation1.dpred(model1)
+dpred2 = simulation2.dpred(model2)
 
 
+# %% Sensitivity attribute computation
+# relartive errors
+rel_err = 0.05
+abs_err= 10
 
-# add some noise to the data
-noise = 0.05*np.abs(dpred)*np.random.rand(len(dpred))
-dpredN = dpred + noise
 
-d1N_real = np.abs(dpredN[0 : len(dpredN) : 2])
-d1N_imag = np.abs(dpredN[1 : len(dpredN) : 2])
+# Data are organized by transmitter location, then component, then frequency. We had nFreq
+# transmitters and each transmitter had 2 receivers (real and imaginary component). So
+# first we will pick out the real and imaginary data
+d1_real = np.abs(dpred1[0 : len(dpred1) : 2])
+d1_imag = np.abs(dpred1[1 : len(dpred1) : 2])
 
+d2_real = np.abs(dpred2[0 : len(dpred2) : 2])
+d2_imag = np.abs(dpred2[1 : len(dpred2) : 2])
+
+#relative error:
+rel_err=0.05
+# d1_real_err = (d1_real * rel_err) + abs_err
+# d1_imag_err = (d1_imag * rel_err) + abs_err
+d1_real_err = np.sqrt((d1_real * rel_err)**2 + abs_err**2)
+d1_imag_err = np.sqrt((d1_imag * rel_err)**2 + abs_err**2)
+
+# Sensitivity attribute computation:
+Sensitivity_real = np.abs(d1_real - d2_real)/d1_real_err
+Sensitivity_imag = np.abs(d1_imag - d2_imag)/d1_imag_err
 
 # %% plotting the stuff
 plt.rcParams.update({'font.size': 14})
-fig = plt.figure(figsize=(10, 10))
-ax1 = plt.subplot2grid(shape=(1, 3), loc=(0, 0), colspan=2)
-ax3 = plt.subplot2grid(shape=(1, 3), loc=(0, 2), colspan=1,  rowspan=1)
-ax=[ax1, ax3]
+fig = plt.figure(figsize=(12, 12))
+ax1 = plt.subplot2grid(shape=(2, 3), loc=(0, 0), colspan=2)
+ax2 = plt.subplot2grid(shape=(2, 3), loc=(1, 0), colspan=2)
+ax3 = plt.subplot2grid(shape=(2, 3), loc=(0, 2), rowspan=2)
+ax=[ax1, ax2, ax3]
 
 #
 
 # Plot sounding data
-ax[0].plot(frequencies, np.abs(d1_real), '.-', lw=2, ms=10, label=r"Real(d)", color=default_colors[0])
-ax[0].plot(frequencies, np.abs(d1_imag), '.:', lw=2, ms=10, label=r"Imag(d)", color=default_colors[0])
-ax[0].plot(frequencies, np.abs(d1N_real), '.-', lw=2, ms=10, label=r"noisy Real(d)", color=default_colors[1])
-ax[0].plot(frequencies, np.abs(d1N_imag), '.:', lw=2, ms=10, label=r"noisy Imag(d)", color=default_colors[1])
+ax[0].plot(frequencies, np.abs(d1_real), '.-', lw=2, ms=10, label=r"Real(d1)", color=default_colors[0])
+ax[0].plot(frequencies, np.abs(d1_imag), '.:', lw=2, ms=10, label=r"Imag(d1)", color=default_colors[0])
+ax[0].plot(frequencies, np.abs(d2_real), '.-', lw=2, ms=10, label=r"Real(d2)", color=default_colors[1])
+ax[0].plot(frequencies, np.abs(d2_imag), '.:', lw=2, ms=10, label=r"Imag(d2)", color=default_colors[1])
+ax[0].plot(frequencies, abs_err*np.ones(frequencies.shape), 'k--', label="noise level")
 ax[0].set_xscale("log")
 ax[0].set_yscale("log")
 ax[0].set_xlabel("Frequency (Hz)")
@@ -191,17 +223,44 @@ ax[0].set_ylabel("|Hs/Hp| (ppm)")
 ax[0].set_title("Secondary Magnetic Field as ppm")
 ax[0].legend()
 ax[0].grid(color="k", alpha=0.5, linestyle="dashed", linewidth=0.5)
+ax[0].set_xlim([2e2, 2e5])
 
+
+
+#  plotsensitivties
+ax[1].plot(frequencies, Sensitivity_real, '.-', label="real", color=default_colors[0])
+ax[1].plot(frequencies, Sensitivity_imag, '.--', label="imag", color=default_colors[0])
+ax[1].plot(frequencies, np.ones(np.size(frequencies))*3, 'k--', label="Threshold")
+ax[1].legend()
+ax[1].set_xscale("log")
+ax[1].set_xlabel("frequency (Hz)")
+ax[1].set_ylabel("Sensitivity (1)")
+ax[1].grid(color="k", alpha=0.5, linestyle="dashed", linewidth=0.5)
+props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+textstring = "\n".join([
+    r"SD=$\frac{|d_1 - d_2|}{\delta d}$",
+    r"$\delta$d = sqrt(({}$\cdot$d$_2$)$^2$ ".format(rel_err)  + " + d$_{noise}^2$)"
+    ])
+ax[1].set_xlim([2e2, 2e5])
+ax[1].set_ylim([0, 10])
+
+ax[1].text(0.1, 0.9, textstring, transform=ax[1].transAxes, fontsize=14,
+        verticalalignment='top', bbox=props)
+#ax[1].set_ylim([-0.1, 6.5])  
 
 
 #Plot conductivity model
-thicknesses_for_plotting1 = np.r_[thicknesses1, 50.]
+thicknesses_for_plotting1 = np.r_[thicknesses1, 70.]
 mesh_for_plotting1 = TensorMesh([thicknesses_for_plotting1])
-plot_layer(1/model1, mesh_for_plotting1, ax=ax[1], xscale="log", showlayers=False, color=default_colors[0], label="m_1")
-ax[1].set_xlabel("Resistivity (Ohm.m)")
-ax[1].invert_yaxis()
-ax[1].grid(color="k", alpha=0.5, linestyle="dashed", linewidth=0.5)
-ax[1].set_xlim([1e1, 1e4])
+thicknesses_for_plotting2 = np.r_[thicknesses2, 70.]
+mesh_for_plotting2 = TensorMesh([thicknesses_for_plotting2])
+plot_layer(1/model1, mesh_for_plotting1, ax=ax[2], xscale="log", showlayers=False, color=default_colors[0], label="m_1")
+plot_layer(1/model2, mesh_for_plotting2, ax=ax[2], xscale="log", showlayers=False, color=default_colors[1])
+ax[2].set_xlabel("Resistivity (Ohm.m)")
+ax[2].invert_yaxis()
+ax[2].grid(color="k", alpha=0.5, linestyle="dashed", linewidth=0.5)
+ax[2].set_xlim([1e1, 1e4])
+ax[2].set_ylim([100, 0])
 plt.tight_layout()
           
           
@@ -222,19 +281,13 @@ if write_output:
         os.mkdir(dir_path)
     
     np.random.seed(222)
-    
+    noise = 0.05*np.abs(dpred)*np.random.rand(len(dpred))
+    dpred += noise
     
     fname = dir_path + 'em1dfm_data.txt'
     np.savetxt(
         fname,
-        np.c_[frequencies, dpredN[0:len(frequencies)], dpredN[len(frequencies):]],
+        np.c_[frequencies, dpred[0:len(frequencies)], dpred[len(frequencies):]],
         fmt='%.4e', header='FREQUENCY HZ_REAL HZ_IMAG'
     )
-    
-    mname=dir_path + "em1dfm_truemodel.txt"
-    z1.append(9999.9)
-    with open(mname, 'w') as f:
-        f.write("Depth\tResitvity\n")
-        for n in range(len(res1)):
-            f.write(str(z1[n]) + "\t" + str(res1[n]))
-            f.write('\n')
+
