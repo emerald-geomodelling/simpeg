@@ -55,8 +55,8 @@ default_colors=['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b'
 # 
 
 # Frequencies being observed in Hz
-#frequencies = np.array([383, 1820, 3315, 8488, 40835, 133530], dtype=float)
-frequencies = np.array([1820, 3315, 8488, 40835, 133530], dtype=float)
+frequencies = np.array([383, 1820, 3315, 8488, 40835, 133530], dtype=float)
+#frequencies = np.array([1820, 3315, 8488, 40835, 133530], dtype=float)
 
 # EM bird geometry
 bird_hight=40
@@ -65,8 +65,8 @@ rel_err=0.05
 noise_level=10
 
 # model1:
-res1=[1000, 100, 1000]  # resistivities mdoel1
-z1=[60,65]           # layer depths model1
+res1=[1000, 100, 100]  # resistivities mdoel1
+z1=[100,120]           # layer depths model1
 
 # %% Define a list of receivers. The real and imaginary components are defined
 # as separate receivers.
@@ -168,7 +168,7 @@ d1_imag = np.abs(dpred[1 : len(dpred) : 2])
 np.random.seed(np.random.randint(256))
 noise = rel_err*np.abs(dpred)*np.random.randn(len(dpred))
 ambientnoise= noise_level * np.random.rand(len(dpred))
-dpredN = dpred + noise # + ambient noise
+dpredN = dpred + noise  + ambientnoise
 
 
 
@@ -199,7 +199,7 @@ ax[0].set_title("Secondary Magnetic Field as ppm")
 ax[0].legend()
 ax[0].grid(color="k", alpha=0.5, linestyle="dashed", linewidth=0.5)
 ax[0].set_xlim([2e2, 2e5])
-ax[0].set_ylim([1, 1e3])
+ax[0].set_ylim([1, 1e4])
 
 #Plot conductivity model
 thicknesses_for_plotting1 = np.r_[thicknesses1, 50.]
@@ -228,7 +228,6 @@ if write_output:
     if not os.path.exists(dir_path):
         os.mkdir(dir_path)
     
-    np.random.seed(222)
     
     
     fname = dir_path + 'em1dfm_data.txt'

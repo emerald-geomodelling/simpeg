@@ -63,8 +63,8 @@ bird_length=10
 
 
 # model1:
-res1=[1000, 100, 1000]  # resistivities mdoel1
-z1=[20, 25]           # layer depths model1
+res1=[1000, 100, 100]  # resistivities mdoel1
+z1=[50, 75]           # layer depths model1
 
 # model2:
 res2=[1000, 1000, 1000]  # resistivities mdoel2

@@ -102,13 +102,13 @@ model_filename = "./outputs/em1dtem_truemodel.txt"
 D=np.loadtxt(model_filename, delimiter="\t", skiprows=1)
 true_model = 1./D[:,1]
 hz = np.diff(D[:,0])
-hz = np.r_[hz, 50.]
+hz = np.r_[hz, 100.]
 true_layers = TensorMesh([hz])
 
 
 # inversion Layer thicknesses
 inv_thicknesses = np.logspace(0,1.5,30)
-startmodel_res=3000
+startmodel_res=300
 # %% ###########################################
 # Load Data and Plot
 # ------------------

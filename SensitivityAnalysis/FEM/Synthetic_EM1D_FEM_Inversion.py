@@ -51,7 +51,7 @@ plt.rcParams.update({'font.size': 14, 'lines.linewidth': 2, 'lines.markersize':8
 # data generated with  to work with Synthetic_EM1D_FEM_Forward.py
 data_filename = "./outputs/em1dfm_data.txt"
 rel_err =  0.05
-noise_level=5
+noise_level=10
 
 # EM bird geometry and setup
 bird_hight=40.
@@ -73,7 +73,7 @@ true_layers = TensorMesh([hz])
 
 # inversion Layer thicknesses
 inv_thicknesses = np.logspace(0,1.5,25)
-startmodel_res=800
+startmodel_res=500
 # %% ###########################################
 # Load Data and Plot
 # ------------------
@@ -228,7 +228,7 @@ dmis.W = 1./uncertainties
 # Define the regularization (model objective function)
 reg_map = maps.IdentityMap(nP=mesh.nC)
 
-reg = regularization.Sparse(mesh, mapping=reg_map, alpha_s=1., alpha_x=1.)
+reg = regularization.Sparse(mesh, mapping=reg_map, alpha_s=0.1, alpha_x=1.)
 #reg = regularization.Tikhonov(mesh, mapping=reg_map, alpha_s=0.025, alpha_x=1)
 
 
@@ -236,7 +236,7 @@ reg = regularization.Sparse(mesh, mapping=reg_map, alpha_s=1., alpha_x=1.)
 reg.mref = starting_model
 
 # # Define sparse and blocky norms p, q
-p = 1
+p = 0
 q = 0
 reg.norms = np.c_[p, q]
 
@@ -332,7 +332,7 @@ if plotL2:
     plot_layer(model_mapping * l2_model, mesh, ax=ax2, showlayers=False, plotSig=False, color="b", label="L2-Model")
 if plotSparse:
     plot_layer(model_mapping * recovered_model, mesh, ax=ax2, showlayers=False, plotSig=False, color="r", label="Sparse Model")
-ax2.set_ylim(0., 100.0)
+ax2.set_ylim(0., 140.0)
 ax2.set_title("True and Recovered Models")
 ax2.legend(loc="lower right")
 plt.gca().invert_yaxis()
@@ -359,4 +359,4 @@ ax1.set_title("Predicted and Observed Data")
 ax1.legend(loc="upper left")
 ax1.grid(color="k", alpha=0.5, linestyle="dashed", linewidth=0.5)
 ax1.set_xlim([2e2, 2e5])
-ax1.set_ylim([1, 1e3])
+ax1.set_ylim([1, 1e4])

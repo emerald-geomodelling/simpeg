@@ -91,8 +91,8 @@ frame_hight=30
 
 
 # Anomalous model:
-res1=[300, 1500, 3000]  # resistivities mdoel1
-z1=[20,45]           # layer depths model1
+res1=[300, 3000, 3000]  # resistivities mdoel1
+z1=[40,50]           # layer depths model1
 
 # model2:
 res2=[3000, 3000, 3000]  # resistivities mdoel2
