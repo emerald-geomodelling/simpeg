@@ -30,7 +30,7 @@ import tarfile
 import matplotlib as mpl
 from matplotlib import pyplot as plt
 from discretize import TensorMesh, SimplexMesh
-from pymatsolver import PardisoSolver
+#from pymatsolver import PardisoSolver
 
 from SimPEG.utils import mkvc
 from SimPEG import (
@@ -58,24 +58,30 @@ plt.rcParams.update({'font.size': 16, 'lines.linewidth': 2, 'lines.markersize':8
 # "https://storage.googleapis.com/simpeg/doc-assets/em1dtm_stitched.tar.gz"
 #
 
-# storage bucket where we have the data
-data_source = "https://storage.googleapis.com/simpeg/doc-assets/em1dtm_stitched_fwd.tar.gz"
+file_name="em1dtm_stitched_data.csv"
+dir_path="./outputs"
 
-# download the data
-downloaded_data = utils.download(data_source, overwrite=True)
+if not(os.path.isfile(os.path.join(dir_path, file_name))):
+    print('data does not exist, downloading ....' )
 
-# path to the directory containing our data
-dir_path = downloaded_data.split(".")[0] + os.sep[0]
-if not os.path.exists(dir_path):
-    os.mkdir(dir_path)
-
-# unzip the tarfile
-tar = tarfile.open(downloaded_data, "r")
-tar.extractall(dir_path)
-tar.close()
+    # storage bucket where we have the data
+    data_source = "https://storage.googleapis.com/simpeg/doc-assets/em1dtm_stitched.tar.gz"
+    
+    # download the data
+    downloaded_data = utils.download(data_source, overwrite=True)
+    
+    # unzip the tarfile
+    tar = tarfile.open(downloaded_data, "r")
+    tar.extractall()
+    tar.close()
+    
+    # path to the directory containing our data
+    dir_path = downloaded_data.split(".")[0] + os.path.sep
+else:
+    print('using file from disk')
 
 # files to work with
-data_filename = dir_path + "em1dtm_stitched_data.csv"
+data_filename = os.path.join(dir_path, file_name)
 
 #############################################
 # Load Data and Plot
@@ -91,7 +97,7 @@ n_sounding = np.shape(source_locations)[0]
 data_header = np.array(list(key for key in df.columns[6:]))
 tdem_data = df[data_header].values
 
-time_filename = dir_path + "times.txt"
+time_filename = os.path.join(dir_path, "times.txt")
 times = np.loadtxt(time_filename)
 
 n_time = len(times)
@@ -210,8 +216,7 @@ starting_model = np.log(conductivity)
 #
 
 simulation = tdem.Simulation1DLayeredStitched(
-    survey=survey, thicknesses=thicknesses, sigmaMap=mapping,
-    solver=PardisoSolver
+    survey=survey, thicknesses=thicknesses, sigmaMap=mapping
 )
 
 ########################################################################
@@ -314,5 +319,5 @@ model_plot = Stitched1DModel(
 )
 
 fig, ax = plt.subplots(1,1, figsize=(10, 8))
-_, ax, cb = model_plot.plot_section(i_line=0, aspect=1, dx=20, cmap='turbo', clim=(8, 100), ax=ax)
+_, ax, cb = model_plot.plot_section(i_line=0, aspect=3, dx=20, cmap='turbo', clim=(8, 100), ax=ax)
 cb.set_label("Resistivity ($\Omega$m)")

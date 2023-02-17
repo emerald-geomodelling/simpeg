@@ -30,7 +30,7 @@ import matplotlib as mpl
 from matplotlib import pyplot as plt
 from matplotlib.colors import LogNorm
 from discretize import TensorMesh
-from pymatsolver import PardisoSolver
+#from pymatsolver import PardisoSolver
 
 from SimPEG import maps, utils
 from SimPEG.utils import mkvc
@@ -49,7 +49,7 @@ write_output = True
 # For this tutorial, we define a line of equally spaced 1D soundings along the
 # Easting direction. However, there is no restriction on the spacing and position
 # of each sounding.
-nx = 11
+nx = 110
 ny = 1
 x = np.arange(nx)*50
 y = np.arange(ny)*100
@@ -151,7 +151,7 @@ model_plot = Stitched1DModel(
     physical_property=1./stitched_conductivity_model
 )
 
-_, ax, cb = model_plot.plot_section(cmap='turbo', aspect=0.5, dx=20, i_line=0, clim=(8, 100))
+_, ax, cb = model_plot.plot_section(cmap='turbo', aspect=3, dx=20, i_line=0, clim=(8, 100))
 cb.set_label("Resistivity ($\Omega$m)")
 
 # the optimum layer thicknesses for a set number of layers. Note that when defining
@@ -177,7 +177,7 @@ mapping = maps.ExpMap(nP=len(stitched_model))
 # Define the simulation
 simulation = tdem.Simulation1DLayeredStitched(
     survey=survey, thicknesses=thicknesses, sigmaMap=mapping,
-    parallel=False, n_cpu=2, solver=PardisoSolver
+    parallel=False, n_cpu=2
 )
 
 # Predict data
