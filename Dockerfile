@@ -13,7 +13,12 @@ RUN pip install make
 RUN pip install cython
 RUN pip install MKL
 RUN pip install pyMKL
+RUN pip install rasterio
+RUN pip install matplotlib
+RUN pip install contextily
 ENV CFLAGS="-I /usr/include/mkl/" 
-RUN pip install -y pydiso
-ADD . /simpeg_em1d_stiched
+RUN pip install pydiso
+ADD ./simpeg_em1d_stiched /simpeg_em1d_stiched
+ADD ./EmeraldProcessing /EmeraldProcessing 
 RUN cd /simpeg_em1d_stiched; pip install .
+RUN cd /EmeraldProcessing; pip install .
