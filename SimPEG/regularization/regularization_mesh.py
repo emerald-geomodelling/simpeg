@@ -477,7 +477,7 @@ class LCRegularizationMesh(RegularizationMesh):
     def vol(self):
         # Assume a unit area for the radial points)
         # We could use the average of cells to nodes
-        self._vol = (np.ones(self.n_nodes, dtype=float)[:, None] * self.mesh_vertical.hx).flatten()
+        self._vol = (np.ones(self.n_nodes, dtype=float)[:, None] * self.mesh_vertical.h[0]).flatten()
         return self._vol[self.indActive].flatten()
 
     @property
@@ -500,7 +500,7 @@ class LCRegularizationMesh(RegularizationMesh):
         """
         if getattr(self, "_h_gridded_z", None) is None:
             self._h_gridded_z = np.tile(
-                self.mesh_vertical.hx, self.n_nodes
+                self.mesh_vertical.h[0], self.n_nodes
             ).flatten()
         return self._h_gridded_z
 
@@ -541,7 +541,7 @@ class LCRegularizationMesh(RegularizationMesh):
 
         """
         if getattr(self, "_gradient_z", None) is None:
-            grad = self.mesh_vertical._cellGradStencil
+            grad = self.mesh_vertical.stencil_cell_gradient
             self._gradient_z = self.Pafz.T * sp.kron(utils.speye(self.n_nodes), grad) * self.Pac
         return self._gradient_z
 
