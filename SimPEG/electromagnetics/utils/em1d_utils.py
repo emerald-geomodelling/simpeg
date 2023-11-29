@@ -52,8 +52,9 @@ def plot_layer(sig, mesh, xscale='log', ax=None, showlayers=False, xlim=None,**k
 
     else:
         ax.set_xscale(xscale)
-        ax.set_xlim(sig_min, sig_max)
-        ax.set_ylim(z.min(), z.max())
+        print(sig_min, sig_max)
+        #ax.set_xlim(sig_min, sig_max)
+        #ax.set_ylim(z.min(), z.max())
         ax.set_xlabel('Conductivity (S/m)', fontsize = 14)
         ax.set_ylabel('Depth (m)', fontsize = 14)
         if showlayers == True:
