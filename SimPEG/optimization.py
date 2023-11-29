@@ -1026,7 +1026,7 @@ class InexactGaussNewton(BFGS, Minimize, Remember):
 
     .. math::
 
-        \mathbf{H p = -g}
+        \\mathbf{H p = -g}
 
     By default BFGS is used as the preconditioner.
 
