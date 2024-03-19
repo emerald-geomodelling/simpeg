@@ -75,6 +75,8 @@ tutorials/13-joint_inversion/cross_gradient_data/*
 
 # jupyter
 *.ipynb
+*.ipynb_checkpoints/
+*.idea/
 
 # results and testing files
 *.obs
