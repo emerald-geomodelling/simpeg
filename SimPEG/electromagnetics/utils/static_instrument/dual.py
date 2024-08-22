@@ -1,23 +1,18 @@
-import numpy as np
 import os
-from matplotlib import pyplot as plt
-from discretize import TensorMesh
+import tarfile
+# import typing
 
-from SimPEG import maps
-from SimPEG.electromagnetics import time_domain as tdem
-from SimPEG.electromagnetics.utils.em1d_utils import plot_layer
-import libaarhusxyz
-import pandas as pd
-
-import numpy as np
-from scipy.spatial import cKDTree, Delaunay
-import os, tarfile
 import matplotlib as mpl
 from matplotlib import pyplot as plt
 from matplotlib.colors import LogNorm
+
+import libaarhusxyz
+import pandas as pd
+import numpy as np
+import scipy.stats
+from scipy.spatial import cKDTree, Delaunay
 from discretize import TensorMesh, SimplexMesh
 
-from SimPEG.utils import mkvc
 from SimPEG import (
     maps, data, data_misfit, inverse_problem, regularization, optimization,
     directives, inversion, utils
@@ -26,17 +21,18 @@ from SimPEG import (
 from SimPEG.utils import mkvc
 import SimPEG.electromagnetics.time_domain as tdem
 import SimPEG.electromagnetics.utils.em1d_utils
-from SimPEG.electromagnetics.utils.em1d_utils import get_2d_mesh,plot_layer, get_vertical_discretization_time
+from SimPEG.electromagnetics.utils.em1d_utils import (
+    get_2d_mesh, plot_layer, get_vertical_discretization_time
+    )
 from SimPEG.regularization import LaterallyConstrained, RegularizationMesh
 
-import scipy.stats
 from . import base
-import typing
+
 
 class DualMomentTEMXYZSystem(base.XYZSystem):
     """Dual moment system, suitable for describing e.g. the SkyTEM
     instruments. This class can not be directly instantiated, but
-    instead, instantiable subclasses can created using the class
+    instead, instantiable subclasses can be created using the class
     method
 
     ```
