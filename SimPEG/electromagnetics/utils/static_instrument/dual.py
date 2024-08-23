@@ -46,25 +46,31 @@ class DualMomentTEMXYZSystem(base.XYZSystem):
     See the help for `XYZSystem` for more information on basic usage.
     """
 
+    def gt_filt_st(self, inuse_ch_key):
+        return np.where((self.xyz.layer_data[inuse_ch_key].sum() == 0).cumsum().diff() == 0)[0][0]
+
+    def gt_filt_end(self, inuse_ch_key):
+        return len(self.xyz.layer_data[inuse_ch_key].loc[1, :]) - np.where((self.xyz.layer_data[inuse_ch_key].sum().loc[::-1] == 0).cumsum().diff() == 0)[0][0]
+
     @property
     def gate_filter__start_lm(self):
-        # stuff
-        return 0
+        inuse_ch_key = "InUse_Ch01"
+        return self.gt_filt_st(inuse_ch_key)
 
     @property
     def gate_filter__end_lm(self):
-        # stuff
-        return 27
+        inuse_ch_key = "InUse_Ch01"
+        return self.gt_filt_end(inuse_ch_key)
 
     @property
     def gate_filter__start_hm(self):
-        # stuff
-        return 0
+        inuse_ch_key = "InUse_Ch02"
+        return self.gt_filt_st(inuse_ch_key)
 
     @property
     def gate_filter__end_hm(self):
-        # stuff
-        return 31
+        inuse_ch_key = "InUse_Ch02"
+        return self.gt_filt_end(inuse_ch_key)
 
     # gate_filter__start_lm=5
     # "Lowest used gate (zero based)"
