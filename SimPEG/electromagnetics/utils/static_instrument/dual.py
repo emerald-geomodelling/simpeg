@@ -1,6 +1,6 @@
 import os
 import tarfile
-# import typing
+import typing
 
 import matplotlib as mpl
 from matplotlib import pyplot as plt
@@ -72,28 +72,39 @@ class DualMomentTEMXYZSystem(base.XYZSystem):
         inuse_ch_key = "InUse_Ch02"
         return self.gt_filt_end(inuse_ch_key)
 
-    # gate_filter__start_lm=5
-    # "Lowest used gate (zero based)"
-    # gate_filter__end_lm=11
-    # "First unused gate above used ones (zero based)"
-    # gate_filter__start_hm=12
-    # "Lowest used gate (zero based)"
-    # gate_filter__end_hm=26
-    # "First unused gate above used ones (zero based)"
-
+    # FIXME!!! Tx_orientation should also be broken up by moment/channel,
+    #  but without seeing how this would look in a gex I don't know how to redo this
     @property
     def tx_orientation(self):
-        # self.gex.tx_orientation
-        return "z"
+        return self.gex.tx_orientation
 
+    # FIXME!!! rx_orientation needs broken up into by channel
+    #  below all the properties are there and a hack to set the global rx_orientation to the lm_rx_orientation
     @property
     def rx_orientation(self):
-        # self.gex.rx_orientation
-        return "z"
+        return self.rx_orientation__lm
 
-    # rx_orientation : typing.Literal['x', 'y', 'z'] = 'z'
+    @property
+    def rx_orientation__lm(self):
+        channel = 1
+        return self.gex.rx_orientation(channel)
+
+    @property
+    def rx_orientation__hm(self):
+        channel = 2
+        return self.gex.rx_orientation(channel)
+
+    # gate_filter__start_lm = 5
+    # "Lowest used gate (zero based)"
+    # gate_filter__end_lm = 11
+    # "First unused gate above used ones (zero based)"
+    # gate_filter__start_hm = 12
+    # "Lowest used gate (zero based)"
+    # gate_filter__end_hm = 26
+    # "First unused gate above used ones (zero based)"
+    # rx_orientation: typing.Literal['x', 'y', 'z'] = 'z'
     # "Receiver orientation"
-    # tx_orientation : typing.Literal['x', 'y', 'z'] = 'z'
+    # tx_orientation: typing.Literal['x', 'y', 'z'] = 'z'
     # "Transmitter orientation"
     
     @classmethod
