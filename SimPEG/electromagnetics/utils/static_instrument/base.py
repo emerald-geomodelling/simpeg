@@ -2,6 +2,7 @@ import numpy as np
 import os
 from matplotlib import pyplot as plt
 from discretize import TensorMesh
+import multiprocessing
 
 from SimPEG import maps
 from SimPEG.electromagnetics import time_domain as tdem
@@ -149,8 +150,9 @@ class XYZSystem(object):
                 for times_full, times_filter
                 in zip(self.times_full, self.times_filter)]
     
-    startmodel__n_layer = 30
+    startmodel__n_layer : int = 30
     "Number of layers in model discretization"
+
     @property
     def n_layer_used(self):
         if "resistivity" in self.xyz.layer_data:
@@ -176,15 +178,26 @@ class XYZSystem(object):
         return np.where(np.isnan(dobs), np.inf, self.data_uncert_array)
 
     dipole_moments = [1]
-    
-    uncertainties__std_data = 0.03
-    "Noise as a factor of data"
-    uncertainties__std_data_override = False
-    "If set to true, use the std_data value instead of data std:s from stacking"
-    uncertainties__noise_level_1ms=3e-8 
-    "V/m^2"
-    uncertainties__noise_exponent=-0.5
-    "t^uncertainties__noise_exponent"
+
+    # uncertainties__std_data = 0.03
+    # "Noise as a factor of data"
+    @property
+    def uncertainties__std_data(self):
+        channel = 1
+        return self.gex.gex_dict[f'Channel{channel}']['UniformDataSTD']
+
+    # uncertainties__std_data_override: bool = False
+    # "If set to true, use the std_data value instead of data std:s from stacking"
+    @property
+    def uncertainties__std_data_override(self):
+        channel = 1
+        return f"dbdt_std_ch{channel}gt" not in self.xyz.layer_data.keys()
+
+    uncertainties__noise_level_1ms : float = 3e-8
+    "Noise amplitude at 1e-3 seconds. Unit of value is V/m^2"
+    uncertainties__noise_exponent : float = -0.5
+    "Slope of noise-floor. Typically expressed as: t^uncertainties__noise_exponent"
+
     @property
     def uncert_array(self):
         n_sounding = len(self.xyz.flightlines)
@@ -205,13 +218,13 @@ class XYZSystem(object):
         
         return np.where(np.isnan(self.data_array_nan), np.Inf, uncertainties)
 
-    startmodel__thicknesses_type: typing.Literal['logspaced', 'geometric', 'time'] = "logspaced"
+    startmodel__thicknesses_type : typing.Literal['logspaced', 'geometric', 'time'] = "logspaced"
     "Type of model discretization"
-    startmodel__thicknesses_minimum_dz = 1
+    startmodel__thicknesses_minimum_dz : float = 1
     "Thickness of thinnest layer if using 'logspaced' or 'geometric' discretization"
-    startmodel__top_depth_last_layer = 400
-    "Depth to the top of the last layer if using logspaced discretization"
-    startmodel__thicknesses_geomtric_factor = 1.15309
+    startmodel__top_depth_last_layer : float = 400
+    "Depth to the top of the last layer if using log-spaced discretization"
+    startmodel__thicknesses_geomtric_factor : float = 1.15309
     "Ratio of one layer to the next if using geometric discretization"
 
     def make_thicknesses(self):
@@ -255,13 +268,24 @@ class XYZSystem(object):
 
     def n_param(self, thicknesses):
         return (len(thicknesses)+1)*len(self.xyz.flightlines)
-    
+
     simulation__solver : typing.Literal['LU', 'pardiso'] = 'LU'
     "Equation solver to use. Some solvers might require hardware support."
-    simulation__parallel = True
-    "Use multiple computation threads in parallel. Useful to set to false in a notebook for debugging."
-    simulation__n_cpu = 3
-    "Number of threads (roughly same as CPU cores) to use"
+
+    @property
+    def simulation__parallel(self):
+        return True
+    # simulation__parallel: bool = True
+    # "Use multiple computation threads in parallel. Useful to set to false in a notebook for debugging."
+
+    # FIXME!!! the simulation__n_cpu will need adjusted when we start to spin up dedicated machines for inversion
+    #  like this property will basically be "choose your inversion machine"
+    @property
+    def simulation__n_cpu(self):
+        return multiprocessing.cpu_count()
+    # simulation__n_cpu = 3
+    # "Number of threads (roughly same as CPU cores) to use"
+
     def make_simulation(self, survey, thicknesses):
         if 'pardiso' in self.simulation__solver.lower():
             print('Using Pardiso solver')
@@ -302,15 +326,15 @@ class XYZSystem(object):
         dmis.W = self.make_misfit_weights()
         return dmis
     
-    startmodel__res=100.
+    startmodel__res : float = 100.
     "Initial resistivity (ohmm)"
     def make_startmodel(self, thicknesses):
         startmodel=np.log(np.ones(self.n_param(thicknesses)) * 1/self.startmodel__res)
         return startmodel
     
-    regularization__alpha_s = 1e-10
-    regularization__alpha_r = 1.
-    regularization__alpha_z = 1.
+    regularization__alpha_s : float = 1e-10
+    regularization__alpha_r : float = 1.
+    regularization__alpha_z : float = 1.
     def make_regularization(self, thicknesses):
         if False:
             assert False, "LCI is currently broken"
@@ -353,18 +377,19 @@ class XYZSystem(object):
     "Random seed for beta (regularization) schedule estimator"
     directives__beta__beta0_ratio : float = 10.
     "Start ratio for the beta (regularization) schedule estimator"
-    directives__beta__cooling_factor=2
+    directives__beta__cooling_factor : float = 2
     "Cooling factor for the beta (regularization) schedule"
-    directives__beta__cooling_rate=1
+    directives__beta__cooling_rate : float = 1
     "Initial cooling rate for the beta (regularization) schedule"
-    directives__irls__enable = False
-    "IRLS is used to generate a sparse model in addition to and l2 model"
-    directives__irls__max_iterations = 30
+    directives__irls__enable : bool = False
+    "IRLS is used to generate a sparse [sharp] model in addition to the l2 [smooth] model"
+    directives__irls__max_iterations : int = 50
     "Maximum number of iterations (after l2 model has converged)"
-    directives__irls__minGNiter = 1
-    directives__irls__fix_Jmatrix = True
-    directives__irls__f_min_change = 1e-3
-    directives__irls__coolingRate = 1
+    # FIXME!!! fill out descriptions for the rest of the irls directives
+    directives__irls__minGNiter : int = 1
+    directives__irls__fix_Jmatrix : bool = True
+    directives__irls__f_min_change : float = 1e-3
+    directives__irls__coolingRate : float = 1
     def make_directives(self):
         if self.directives__beta__seed:
             BetaEstimate = directives.BetaEstimate_ByEig(beta0_ratio=self.directives__beta__beta0_ratio, 
@@ -391,9 +416,11 @@ class XYZSystem(object):
 
         return dirs
         
-    optimizer__max_iter=40
-    "Maximum number of gauss newton iterations"
-    optimizer__max_iter_cg=20
+    optimizer__max_iter : int = 50
+    "Maximum number of inversion iterations"
+    optimizer__max_iter_cg : int = 20
+    "Maximum number of Inexact-Gauss-Newton iterations"
+
     def make_optimizer(self):
         return optimization.InexactGaussNewton(maxIter = self.optimizer__max_iter, maxIterCG=self.optimizer__max_iter_cg)
     

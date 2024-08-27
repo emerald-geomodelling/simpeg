@@ -78,21 +78,10 @@ class DualMomentTEMXYZSystem(base.XYZSystem):
     def tx_orientation(self):
         return self.gex.tx_orientation
 
-    # FIXME!!! rx_orientation needs broken up into by channel
-    #  below all the properties are there and a hack to set the global rx_orientation to the lm_rx_orientation
     @property
     def rx_orientation(self):
-        return self.rx_orientation__lm
-
-    @property
-    def rx_orientation__lm(self):
-        channel = 1
-        return self.gex.rx_orientation(channel)
-
-    @property
-    def rx_orientation__hm(self):
-        channel = 2
-        return self.gex.rx_orientation(channel)
+        return [self.gex.rx_orientation(channel) for channel in range(self.gex.number_channels)]
+        # return self.rx_orientation__lm
 
     # gate_filter__start_lm = 5
     # "Lowest used gate (zero based)"
@@ -148,7 +137,8 @@ class DualMomentTEMXYZSystem(base.XYZSystem):
             dbdt = np.where(self.xyz.dbdt_inuse_ch1gt == 0, np.nan, dbdt)
         tiltcorrection = self.correct_tilt_pitch_for1Dinv
         tiltcorrection = np.tile(tiltcorrection, (dbdt.shape[1], 1)).T
-        return - dbdt * self.xyz.model_info.get("scalefactor", 1) * self.gex.Channel1['GateFactor'] * tiltcorrection
+        channel = 1
+        return - dbdt * self.xyz.model_info.get("scalefactor", 1) * self.gex[f"Channel{channel}"]['GateFactor'] * tiltcorrection
     
     @property
     def hm_data(self):
@@ -157,7 +147,8 @@ class DualMomentTEMXYZSystem(base.XYZSystem):
             dbdt = np.where(self.xyz.dbdt_inuse_ch2gt == 0, np.nan, dbdt)
         tiltcorrection = self.correct_tilt_pitch_for1Dinv
         tiltcorrection = np.tile(tiltcorrection, (dbdt.shape[1], 1)).T
-        return - dbdt * self.xyz.model_info.get("scalefactor", 1) * self.gex.Channel2['GateFactor'] * tiltcorrection
+        channel = 2
+        return - dbdt * self.xyz.model_info.get("scalefactor", 1) * self.gex[f"Channel{channel}"]['GateFactor'] * tiltcorrection
 
     # NOTE: dbdt_std is a fraction, not an actual standard deviation size!
     @property
@@ -178,13 +169,15 @@ class DualMomentTEMXYZSystem(base.XYZSystem):
 
     @property
     def dipole_moments(self):
-        return [self.gex.gex_dict['Channel1']['ApproxDipoleMoment'],
-                self.gex.gex_dict['Channel2']['ApproxDipoleMoment']]
+        return [self.gex.gex_dict[f'Channel{channel}']['ApproxDipoleMoment'] for channel in range(self.gex.number_channels)]
+        # return [self.gex.gex_dict['Channel1']['ApproxDipoleMoment'],
+        #         self.gex.gex_dict['Channel2']['ApproxDipoleMoment']]
         
     @property
     def times_full(self):
-        return (np.array(self.gex.gate_times('Channel1')[:,0]),
-                np.array(self.gex.gate_times('Channel2')[:,0]))    
+        return tuple(np.array(self.gex.gate_times(f'Channel{channel}')[:, 0]) for channel in range(self.gex.number_channels))
+        # return (np.array(self.gex.gate_times('Channel1')[:,0]),
+        #         np.array(self.gex.gate_times('Channel2')[:,0]))
 
     @property
     def times_filter(self):        
@@ -193,7 +186,16 @@ class DualMomentTEMXYZSystem(base.XYZSystem):
         filts[0][self.gate_filter__start_lm:self.gate_filter__end_lm] = True
         filts[1][self.gate_filter__start_hm:self.gate_filter__end_hm] = True
         return filts
-        
+
+    @property
+    def uncertainties__std_data(self):
+        return [self.gex.gex_dict[f'Channel{channel}']['UniformDataSTD'] for channel in range(self.gex.number_channels)]
+
+    @property
+    def uncertainties__std_data_override(self):
+        # "If set to true, use the std_data value instead of data std:s from stacking"
+        return [f"dbdt_std_ch{channel}gt" not in self.xyz.layer_data.keys() for channel in range(self.gex.number_channels)]
+
     def make_waveforms(self):
         time_input_currents_hm = self.waveform_hm[:,0]
         input_currents_hm = self.waveform_hm[:,1]
