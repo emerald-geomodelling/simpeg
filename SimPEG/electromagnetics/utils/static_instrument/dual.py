@@ -53,6 +53,24 @@ class DualMomentTEMXYZSystem(base.XYZSystem):
         return len(self.xyz.layer_data[inuse_ch_key].loc[1, :]) - np.where((self.xyz.layer_data[inuse_ch_key].sum().loc[::-1] == 0).cumsum().diff() == 0)[0][0]
 
     @property
+    def gate_filter__start(self):
+        start_list = []
+        for channel in range(1, 1 + self.gex.number_channels):
+            str_ch = f"0{channel}"[-2:]
+            inuse_ch_key = f"InUse_Ch{str_ch}"
+            start_list.append(self.gt_filt_st(inuse_ch_key))
+        return start_list
+
+    @property
+    def gate_filter__end(self):
+        end_list = []
+        for channel in range(1, 1 + self.gex.number_channels):
+            str_ch = f"0{channel}"[-2:]
+            inuse_ch_key = f"InUse_Ch{str_ch}"
+            end_list.append(self.gt_filt_end(inuse_ch_key))
+        return end_list
+
+    @property
     def gate_filter__start_lm(self):
         inuse_ch_key = "InUse_Ch01"
         return self.gt_filt_st(inuse_ch_key)
@@ -80,21 +98,7 @@ class DualMomentTEMXYZSystem(base.XYZSystem):
 
     @property
     def rx_orientation(self):
-        return [self.gex.rx_orientation(channel) for channel in range(self.gex.number_channels)]
-        # return self.rx_orientation__lm
-
-    # gate_filter__start_lm = 5
-    # "Lowest used gate (zero based)"
-    # gate_filter__end_lm = 11
-    # "First unused gate above used ones (zero based)"
-    # gate_filter__start_hm = 12
-    # "Lowest used gate (zero based)"
-    # gate_filter__end_hm = 26
-    # "First unused gate above used ones (zero based)"
-    # rx_orientation: typing.Literal['x', 'y', 'z'] = 'z'
-    # "Receiver orientation"
-    # tx_orientation: typing.Literal['x', 'y', 'z'] = 'z'
-    # "Transmitter orientation"
+        return [(self.gex.rx_orientation(channel)).lower() for channel in range(1, 1 + self.gex.number_channels)]
     
     @classmethod
     def load_gex(cls, gex):
@@ -169,15 +173,15 @@ class DualMomentTEMXYZSystem(base.XYZSystem):
 
     @property
     def dipole_moments(self):
-        return [self.gex.gex_dict[f'Channel{channel}']['ApproxDipoleMoment'] for channel in range(self.gex.number_channels)]
+        return [self.gex.gex_dict[f'Channel{channel}']['ApproxDipoleMoment'] for channel in range(1, 1 + self.gex.number_channels)]
         # return [self.gex.gex_dict['Channel1']['ApproxDipoleMoment'],
         #         self.gex.gex_dict['Channel2']['ApproxDipoleMoment']]
         
     @property
     def times_full(self):
-        return tuple(np.array(self.gex.gate_times(f'Channel{channel}')[:, 0]) for channel in range(self.gex.number_channels))
-        # return (np.array(self.gex.gate_times('Channel1')[:,0]),
-        #         np.array(self.gex.gate_times('Channel2')[:,0]))
+        return tuple(np.array(self.gex.gate_times(channel)[:, 0]) for channel in range(1, 1 + self.gex.number_channels))
+        # return (np.array(self.gex.gate_times(1)[:,0]),
+        #         np.array(self.gex.gate_times(2)[:,0]))
 
     @property
     def times_filter(self):        
@@ -189,12 +193,12 @@ class DualMomentTEMXYZSystem(base.XYZSystem):
 
     @property
     def uncertainties__std_data(self):
-        return [self.gex.gex_dict[f'Channel{channel}']['UniformDataSTD'] for channel in range(self.gex.number_channels)]
+        return [self.gex.gex_dict[f'Channel{channel}']['UniformDataSTD'] for channel in range(1, 1 + self.gex.number_channels)]
 
     @property
     def uncertainties__std_data_override(self):
         # "If set to true, use the std_data value instead of data std:s from stacking"
-        return [f"dbdt_std_ch{channel}gt" not in self.xyz.layer_data.keys() for channel in range(self.gex.number_channels)]
+        return [f"dbdt_std_ch{channel}gt" not in self.xyz.layer_data.keys() for channel in range(1, 1 + self.gex.number_channels)]
 
     def make_waveforms(self):
         time_input_currents_hm = self.waveform_hm[:,0]
