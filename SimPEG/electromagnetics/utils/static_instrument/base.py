@@ -383,7 +383,7 @@ class XYZSystem(object):
     "Initial cooling rate for the beta (regularization) schedule"
     directives__irls__enable : bool = False
     "IRLS is used to generate a sparse [sharp] model in addition to the l2 [smooth] model"
-    directives__irls__max_iterations : int = 50
+    directives__irls__max_iterations : int = 30
     "Maximum number of iterations (after l2 model has converged)"
     # FIXME!!! fill out descriptions for the rest of the irls directives
     directives__irls__minGNiter : int = 1
