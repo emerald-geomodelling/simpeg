@@ -390,8 +390,62 @@ class Simulation1DLayered(BaseEM1DSimulation):
                 i_A += 1
         return out
 
+import em1d.experiment
+import em1d.forwards
+import torch
 
-def run_simulation_time_domain(args):
+def run_simulation_time_domain_new(args):
+    (
+        source_list,
+        topo,
+        thicknesses,
+        sigma,
+        eta,
+        tau,
+        c,
+        chi,
+        dchi,
+        tau1,
+        tau2,
+        h,
+        output_type,
+        invert_height,
+        return_projection,
+        coefficients
+    ) = args
+
+    if return_projection:
+        tx = em1d.experiment.Loop.square(1)
+        tx.x += source_list[0].location[0]
+        tx.y += source_list[0].location[1]
+        tx.z += abs(source_list[0].location[2])
+        rx  = em1d.experiment.Receiver(*source_list[0].receiver_list[0].locations[0])
+        rx.z = abs(rx.z) # Positivce up! Everyone else has their head in the ground!
+
+        gatetimes = [torch.from_numpy(src.receiver_list[0].times)
+                     for src in source_list]
+                     
+        waveworms = [em1d.experiment.Waveform(src.waveform.times, src.waveform.currents)
+                     for src in source_list]
+
+        # FIXME: What if different for different moments?
+        recfilters = em1d.experiment.FilterChain([
+            em1d.experiment.ButterworthFilter(
+                source_list[0].receiver_list[0].lp_cutoff_frequency_1),
+        ])
+
+        return em1d.forwards.DualMoment(tx, rx, gatetimes, recfilters, waveworms)
+
+    if output_type == "sensitivity_sigma":
+        ds = sigma * 0.02
+        sigma_pert = np.diag(ds) + sigma[:, None] 
+        data_orig = coefficients(sigma, thicknesses)
+        data_pert = coefficients(sigma_pert, thicknesses)
+        return ((data_orig - data_pert) / ds[:, None]).flatten() / 100.
+    else:
+        return -coefficients(sigma, thicknesses)
+
+def run_simulation_time_domain_old(args):
     """
     This method simulates the EM response or computes the sensitivities for
     a single sounding. The method allows for parallelization of
@@ -412,7 +466,7 @@ def run_simulation_time_domain(args):
     :param bool invert_height: boolean switch for inverting for source height
     :return: response or sensitivities
     """
-
+    
     if mkl_set_num_threads is not None:
         mkl_set_num_threads(1)
 
@@ -501,6 +555,18 @@ def run_simulation_time_domain(args):
     #         resp = sim.dpred(m)
     #         return resp
 
+import sys
+sys.sims_new = []
+sys.sims_old = []
+    
+def run_simulation_time_domain(args):
+    if sys.use_old:
+        res = run_simulation_time_domain_old(args)
+        sys.sims_old.append((args, res))
+    else:
+        res = run_simulation_time_domain_new(args)
+        sys.sims_new.append((args, res))
+    return res
 
 #######################################################################
 #       STITCHED 1D SIMULATION CLASS AND GLOBAL FUNCTIONS
