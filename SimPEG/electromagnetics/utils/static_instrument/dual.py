@@ -56,8 +56,9 @@ class DualMomentTEMXYZSystem(base.XYZSystem):
     def gate_filter__start(self):
         start_list = []
         for channel in range(1, 1 + self.gex.number_channels):
-            str_ch = f"0{channel}"[-2:]
-            inuse_ch_key = f"InUse_Ch{str_ch}"
+            # str_ch = f"0{channel}"[-2:]
+            # inuse_ch_key = f"InUse_Ch{str_ch}"
+            inuse_ch_key = f"dbdt_inuse_ch{channel}gt"
             start_list.append(self.gt_filt_st(inuse_ch_key))
         return start_list
 
@@ -65,30 +66,11 @@ class DualMomentTEMXYZSystem(base.XYZSystem):
     def gate_filter__end(self):
         end_list = []
         for channel in range(1, 1 + self.gex.number_channels):
-            str_ch = f"0{channel}"[-2:]
-            inuse_ch_key = f"InUse_Ch{str_ch}"
+            # str_ch = f"0{channel}"[-2:]
+            # inuse_ch_key = f"InUse_Ch{str_ch}"
+            inuse_ch_key = f"dbdt_inuse_ch{channel}gt"
             end_list.append(self.gt_filt_end(inuse_ch_key))
         return end_list
-
-    @property
-    def gate_filter__start_lm(self):
-        inuse_ch_key = "InUse_Ch01"
-        return self.gt_filt_st(inuse_ch_key)
-
-    @property
-    def gate_filter__end_lm(self):
-        inuse_ch_key = "InUse_Ch01"
-        return self.gt_filt_end(inuse_ch_key)
-
-    @property
-    def gate_filter__start_hm(self):
-        inuse_ch_key = "InUse_Ch02"
-        return self.gt_filt_st(inuse_ch_key)
-
-    @property
-    def gate_filter__end_hm(self):
-        inuse_ch_key = "InUse_Ch02"
-        return self.gt_filt_end(inuse_ch_key)
 
     # FIXME!!! Tx_orientation should also be broken up by moment/channel,
     #  but without seeing how this would look in a gex I don't know how to redo this
@@ -114,19 +96,24 @@ class DualMomentTEMXYZSystem(base.XYZSystem):
     @property
     def sounding_filter(self):
         # Exclude soundings with no usable gates
-        return self._xyz.dbdt_inuse_ch1gt.values.sum(axis=1) + self._xyz.dbdt_inuse_ch2gt.sum(axis=1) > 0
+        # return self._xyz.dbdt_inuse_ch1gt.values.sum(axis=1) + self._xyz.dbdt_inuse_ch2gt.sum(axis=1) > 0
+        num_gates_per_sounding_per_moment = {}
+        for channel in range(self.gex.number_channels):
+            iu_key = f"dbdt_inuse_ch{channel + 1}gt"
+            num_gates_per_sounding_per_moment[channel] = self._xyz.layer_data[iu_key].values.sum(axis=1)
+        num_gates_per_sounding = pd.DataFrame.from_dict(num_gates_per_sounding_per_moment)
+        print(f"num_gates_per_sounding = {num_gates_per_sounding}")
+        print(f"num_gates_per_sounding.sum(axis=1) > 0 = {num_gates_per_sounding.sum(axis=1) > 0}")
+        return num_gates_per_sounding.sum(axis=1) > 0
 
     @property
     def area(self):
         return self.gex.General['TxLoopArea']
-    
+
     @property
-    def waveform_hm(self):
-        return self.gex.General['WaveformHMPoint']
-    
-    @property
-    def waveform_lm(self):
-        return self.gex.General['WaveformLMPoint']
+    def waveform(self):
+        return [self.gex.General[f"Waveform{self.gex.transmitter_moment(channel)}Point"] for channel in range(1, 1 + self.gex.number_channels)]
+
 
     @property
     def correct_tilt_pitch_for1Dinv(self):
@@ -187,8 +174,9 @@ class DualMomentTEMXYZSystem(base.XYZSystem):
     def times_filter(self):        
         times = self.times_full
         filts = [np.zeros(len(t), dtype=bool) for t in times]
-        filts[0][self.gate_filter__start_lm:self.gate_filter__end_lm] = True
-        filts[1][self.gate_filter__start_hm:self.gate_filter__end_hm] = True
+        # FIXME: loop over channel number
+        for channel in range(self.gex.number_channels):
+            filts[channel][self.gate_filter__start[channel]: self.gate_filter__end[channel]] = True
         return filts
 
     @property
@@ -201,14 +189,14 @@ class DualMomentTEMXYZSystem(base.XYZSystem):
         return [f"dbdt_std_ch{channel}gt" not in self.xyz.layer_data.keys() for channel in range(1, 1 + self.gex.number_channels)]
 
     def make_waveforms(self):
-        time_input_currents_hm = self.waveform_hm[:,0]
-        input_currents_hm = self.waveform_hm[:,1]
-        time_input_currents_lm = self.waveform_lm[:,0]
-        input_currents_lm = self.waveform_lm[:,1]
+        time_input_currents = []
+        input_currents = []
+        for channel in range(self.gex.number_channels):
+            time_input_currents.append(self.waveform[channel][:,0])
+            input_currents.append(self.waveform[channel][:,1])
 
-        waveform_hm = tdem.sources.PiecewiseLinearWaveform(time_input_currents_hm, input_currents_hm)
-        waveform_lm = tdem.sources.PiecewiseLinearWaveform(time_input_currents_lm, input_currents_lm)
-        return waveform_lm, waveform_hm
+        return [tdem.sources.PiecewiseLinearWaveform(time_input_currents[channel], input_currents[channel]) for channel in range(self.gex.number_channels)]
+
     
     def make_system(self, idx, location, times):
         # FIXME: Martin says set z to altitude, not z (subtract topo), original code from seogi doesn't work!
@@ -216,22 +204,12 @@ class DualMomentTEMXYZSystem(base.XYZSystem):
         receiver_location = (location[0] + self.gex.General['RxCoilPosition'][0],
                              location[1],
                              location[2] + np.abs(self.gex.General['RxCoilPosition'][2]))
-        waveform_lm, waveform_hm = self.make_waveforms()        
-
-        return [
-            tdem.sources.MagDipole(
-                [tdem.receivers.PointMagneticFluxTimeDerivative(
-                    receiver_location, times[0], self.rx_orientation)],
-                location=location,
-                waveform=waveform_lm,
-                orientation=self.tx_orientation,
-                i_sounding=idx),
-            tdem.sources.MagDipole(
-                [tdem.receivers.PointMagneticFluxTimeDerivative(
-                    receiver_location, times[1], self.rx_orientation)],
-                location=location,
-                waveform=waveform_hm,
-                orientation=self.tx_orientation,
-                i_sounding=idx)]
-
-    
+        waveforms = self.make_waveforms()
+        return [tdem.sources.MagDipole([tdem.receivers.PointMagneticFluxTimeDerivative(receiver_location,
+                                                                                       times[channel],
+                                                                                       self.rx_orientation[channel])],
+                                       location=location,
+                                       waveform=waveforms[channel],
+                                       orientation=self.tx_orientation,
+                                       i_sounding=idx)
+                for channel in range(self.gex.number_channels)]
