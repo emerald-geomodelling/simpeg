@@ -31,6 +31,7 @@ class FilteredXYZ(libaarhusxyz.XYZ):
                 soundings = self.layer_data[key].iloc[soundingfilter]
             else:
                 soundings = self.layer_data[key].loc[soundingfilter]
+            print(f"key = {key}")
             self.layer_data[key] = soundings.iloc[:, self.get_layerfilter(key)].reset_index(drop=True)
             
         return self
@@ -48,7 +49,12 @@ class FilteredXYZ(libaarhusxyz.XYZ):
         unfilteredxyz = libaarhusxyz.XYZ(xyz)
 
         if soundingfilter:
+            old = unfilteredxyz.flightlines
             unfilteredxyz.flightlines = copy.deepcopy(self.xyz.flightlines)
+            for key in old.columns:
+                if key not in unfilteredxyz.flightlines:
+                    unfilteredxyz.flightlines[key] = np.NaN
+                unfilteredxyz.flightlines.loc[self.get_soundingfilter(),key] = old[key].values            
             for key in xyz.layer_data.keys():
                 old = unfilteredxyz.layer_data[key]
                 unfilteredxyz.layer_data[key] = pd.DataFrame(
@@ -56,7 +62,8 @@ class FilteredXYZ(libaarhusxyz.XYZ):
                     columns=unfilteredxyz.layer_data[key].columns
                 ).astype(
                     unfilteredxyz.layer_data[key].dtypes)
-                unfilteredxyz.layer_data[key].iloc[self.get_soundingfilter(),:] = old.values
+                unfilteredxyz.layer_data[key].loc[self.get_soundingfilter(),:] = old.values
+            
         if layerfilter:
             for key in xyz.layer_data.keys():
                 old = unfilteredxyz.layer_data[key]

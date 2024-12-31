@@ -193,7 +193,7 @@ class XYZSystem(object):
         channel = 1
         return f"dbdt_std_ch{channel}gt" not in self.xyz.layer_data.keys()
 
-    uncertainties__noise_level_1ms : float = 3e-8
+    uncertainties__noise_level_1ms : float = 1e-9
     "Noise amplitude at 1e-3 seconds. Unit of value is V/m^2"
     uncertainties__noise_exponent : float = -0.5
     "Slope of noise-floor. Typically expressed as: t^uncertainties__noise_exponent"
@@ -331,10 +331,24 @@ class XYZSystem(object):
     def make_startmodel(self, thicknesses):
         startmodel=np.log(np.ones(self.n_param(thicknesses)) * 1/self.startmodel__res)
         return startmodel
-    
-    regularization__alpha_s : float = 1e-10
+
+    # FIXME!!! Should alpha_s's default be set to something based off the model domain?
+    #  https://giftoolscookbook.readthedocs.io/en/latest/content/fundamentals/Alphas.html
+    #  Here it talks about how how alpha_s is often set to
+    #  alpha_s = 1/(h**2),
+    #  where h is the cell size dimension for the core region.
+    #  for us h could be
+    #    1) the height of the last, non-halfspace layer,
+    #    2) the average thickness of our model domain,
+    #    3) the average sounding spacing.
+    #    4) 1e-4 as proposed in the link above
+    #    5) line spacing (if 100m then alpha_s = 1e-4, if 400m then 6.3e-6)
+    #    6) geomean of the linespacing and sounding spacing: sqrt(line_space * sound_space)
+    #        - 25m sounding spacing, 100m line spacing: h=50, alpha_s=4e-4
+    regularization__alpha_s : float = 1e-4
     regularization__alpha_r : float = 1.
     regularization__alpha_z : float = 1.
+
     def make_regularization(self, thicknesses):
         if False:
             assert False, "LCI is currently broken"
@@ -534,7 +548,8 @@ class XYZSystem(object):
             uncertfilt = np.isinf(self.data_uncert_array_culled)
             
             derr = (self.inv.invProb.dmisfit.data.dobs-dpred) * self.inv.invProb.dmisfit.W.diagonal()
-            std = np.abs(1 / self.inv.invProb.dmisfit.W.diagonal() / self.inv.invProb.dmisfit.data.dobs)
+            with np.errstate(divide='ignore'):
+                std = np.abs(1 / self.inv.invProb.dmisfit.W.diagonal() / self.inv.invProb.dmisfit.data.dobs)
 
             # dpred, dobs etc contain dummy values where uncertainty
             # is inf. Don't let them through to the file or it will
@@ -550,7 +565,8 @@ class XYZSystem(object):
                 xyzresp.layer_data["dbdt_std_ch%sgt" % (idx + 1)] = moment
 
             derrall = reshape_nosplit(derr)
-            xyzresp.flightlines['resdata'] = np.sqrt(np.nansum(derrall**2, axis=1) / (derrall > 0).sum(axis=1))
+            with np.errstate(divide='ignore'):
+                xyzresp.flightlines['resdata'] = np.sqrt(np.nansum(derrall**2, axis=1) / (derrall > 0).sum(axis=1))
             
         dpred = dpred / self.xyz.model_info.get("scalefactor", 1)
         
@@ -561,7 +577,7 @@ class XYZSystem(object):
         for idx, t in enumerate(self.times):
             xyzresp.model_info["gate times for channel %s" % (idx + 1)] = list(t)
 
-        return self.pad_times(xyzresp, self.times_full, self.times_filter)
+        return self.xyz.unfilter(self.pad_times(xyzresp, self.times_full, self.times_filter), layerfilter=False)
     
     def forward(self, **kw):
         """Does a forward modelling of the model in the XYZ file using
@@ -575,4 +591,4 @@ class XYZSystem(object):
         model_cond=np.log(1/self.xyz.resistivity.values)
         resp = self.sim.dpred(model_cond.flatten())
 
-        return self.xyz.unfilter(self.forward_data_to_xyz(resp), layerfilter=False)
+        return self.forward_data_to_xyz(resp)
