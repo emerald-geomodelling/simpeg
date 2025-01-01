@@ -24,7 +24,7 @@ class SingleMomentTEMXYZSystem(base.XYZSystem):
 
     @property
     def dipole_moments(self):
-        return [self.aera * self.i_max]
+        return [self.area * self.i_max]
 
     def make_waveforms(self):
         if self.waveform is None:

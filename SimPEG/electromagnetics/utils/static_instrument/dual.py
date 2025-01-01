@@ -1,23 +1,18 @@
-import numpy as np
 import os
-from matplotlib import pyplot as plt
-from discretize import TensorMesh
+import tarfile
+import typing
 
-from SimPEG import maps
-from SimPEG.electromagnetics import time_domain as tdem
-from SimPEG.electromagnetics.utils.em1d_utils import plot_layer
-import libaarhusxyz
-import pandas as pd
-
-import numpy as np
-from scipy.spatial import cKDTree, Delaunay
-import os, tarfile
 import matplotlib as mpl
 from matplotlib import pyplot as plt
 from matplotlib.colors import LogNorm
+
+import libaarhusxyz
+import pandas as pd
+import numpy as np
+import scipy.stats
+from scipy.spatial import cKDTree, Delaunay
 from discretize import TensorMesh, SimplexMesh
 
-from SimPEG.utils import mkvc
 from SimPEG import (
     maps, data, data_misfit, inverse_problem, regularization, optimization,
     directives, inversion, utils
@@ -26,17 +21,18 @@ from SimPEG import (
 from SimPEG.utils import mkvc
 import SimPEG.electromagnetics.time_domain as tdem
 import SimPEG.electromagnetics.utils.em1d_utils
-from SimPEG.electromagnetics.utils.em1d_utils import get_2d_mesh,plot_layer, get_vertical_discretization_time
+from SimPEG.electromagnetics.utils.em1d_utils import (
+    get_2d_mesh, plot_layer, get_vertical_discretization_time
+    )
 from SimPEG.regularization import LaterallyConstrained, RegularizationMesh
 
-import scipy.stats
 from . import base
-import typing
+
 
 class DualMomentTEMXYZSystem(base.XYZSystem):
     """Dual moment system, suitable for describing e.g. the SkyTEM
     instruments. This class can not be directly instantiated, but
-    instead, instantiable subclasses can created using the class
+    instead, instantiable subclasses can be created using the class
     method
 
     ```
@@ -49,19 +45,42 @@ class DualMomentTEMXYZSystem(base.XYZSystem):
 
     See the help for `XYZSystem` for more information on basic usage.
     """
-    gate_filter__start_lm=5
-    "Lowest used gate (zero based)"
-    gate_filter__end_lm=11
-    "First unused gate above used ones (zero based)"
-    gate_filter__start_hm=12
-    "Lowest used gate (zero based)"
-    gate_filter__end_hm=26
-    "First unused gate above used ones (zero based)"
 
-    rx_orientation : typing.Literal['x', 'y', 'z'] = 'z'
-    "Receiver orientation"
-    tx_orientation : typing.Literal['x', 'y', 'z'] = 'z'
-    "Transmitter orientation"
+    def gt_filt_st(self, inuse_ch_key):
+        return np.where((self.xyz.layer_data[inuse_ch_key].sum() == 0).cumsum().diff() == 0)[0][0]
+
+    def gt_filt_end(self, inuse_ch_key):
+        return len(self.xyz.layer_data[inuse_ch_key].loc[1, :]) - np.where((self.xyz.layer_data[inuse_ch_key].sum().loc[::-1] == 0).cumsum().diff() == 0)[0][0]
+
+    @property
+    def gate_filter__start(self):
+        start_list = []
+        for channel in range(1, 1 + self.gex.number_channels):
+            # str_ch = f"0{channel}"[-2:]
+            # inuse_ch_key = f"InUse_Ch{str_ch}"
+            inuse_ch_key = f"dbdt_inuse_ch{channel}gt"
+            start_list.append(self.gt_filt_st(inuse_ch_key))
+        return start_list
+
+    @property
+    def gate_filter__end(self):
+        end_list = []
+        for channel in range(1, 1 + self.gex.number_channels):
+            # str_ch = f"0{channel}"[-2:]
+            # inuse_ch_key = f"InUse_Ch{str_ch}"
+            inuse_ch_key = f"dbdt_inuse_ch{channel}gt"
+            end_list.append(self.gt_filt_end(inuse_ch_key))
+        return end_list
+
+    # FIXME!!! Tx_orientation should also be broken up by moment/channel,
+    #  but without seeing how this would look in a gex I don't know how to redo this
+    @property
+    def tx_orientation(self):
+        return self.gex.tx_orientation
+
+    @property
+    def rx_orientation(self):
+        return [(self.gex.rx_orientation(channel)).lower() for channel in range(1, 1 + self.gex.number_channels)]
     
     @classmethod
     def load_gex(cls, gex):
@@ -77,19 +96,24 @@ class DualMomentTEMXYZSystem(base.XYZSystem):
     @property
     def sounding_filter(self):
         # Exclude soundings with no usable gates
-        return self._xyz.dbdt_inuse_ch1gt.values.sum(axis=1) + self._xyz.dbdt_inuse_ch2gt.sum(axis=1) > 0
+        # return self._xyz.dbdt_inuse_ch1gt.values.sum(axis=1) + self._xyz.dbdt_inuse_ch2gt.sum(axis=1) > 0
+        num_gates_per_sounding_per_moment = {}
+        for channel in range(self.gex.number_channels):
+            iu_key = f"dbdt_inuse_ch{channel + 1}gt"
+            num_gates_per_sounding_per_moment[channel] = self._xyz.layer_data[iu_key].values.sum(axis=1)
+        num_gates_per_sounding = pd.DataFrame.from_dict(num_gates_per_sounding_per_moment)
+        print(f"num_gates_per_sounding = {num_gates_per_sounding}")
+        print(f"num_gates_per_sounding.sum(axis=1) > 0 = {num_gates_per_sounding.sum(axis=1) > 0}")
+        return num_gates_per_sounding.sum(axis=1) > 0
 
     @property
     def area(self):
         return self.gex.General['TxLoopArea']
-    
+
     @property
-    def waveform_hm(self):
-        return self.gex.General['WaveformHMPoint']
-    
-    @property
-    def waveform_lm(self):
-        return self.gex.General['WaveformLMPoint']
+    def waveform(self):
+        return [self.gex.General[f"Waveform{self.gex.transmitter_moment(channel)}Point"] for channel in range(1, 1 + self.gex.number_channels)]
+
 
     @property
     def correct_tilt_pitch_for1Dinv(self):
@@ -104,7 +128,8 @@ class DualMomentTEMXYZSystem(base.XYZSystem):
             dbdt = np.where(self.xyz.dbdt_inuse_ch1gt == 0, np.nan, dbdt)
         tiltcorrection = self.correct_tilt_pitch_for1Dinv
         tiltcorrection = np.tile(tiltcorrection, (dbdt.shape[1], 1)).T
-        return - dbdt * self.xyz.model_info.get("scalefactor", 1) * self.gex.Channel1['GateFactor'] * tiltcorrection
+        channel = 1
+        return - dbdt * self.xyz.model_info.get("scalefactor", 1) * self.gex[f"Channel{channel}"]['GateFactor'] * tiltcorrection
     
     @property
     def hm_data(self):
@@ -113,7 +138,8 @@ class DualMomentTEMXYZSystem(base.XYZSystem):
             dbdt = np.where(self.xyz.dbdt_inuse_ch2gt == 0, np.nan, dbdt)
         tiltcorrection = self.correct_tilt_pitch_for1Dinv
         tiltcorrection = np.tile(tiltcorrection, (dbdt.shape[1], 1)).T
-        return - dbdt * self.xyz.model_info.get("scalefactor", 1) * self.gex.Channel2['GateFactor'] * tiltcorrection
+        channel = 2
+        return - dbdt * self.xyz.model_info.get("scalefactor", 1) * self.gex[f"Channel{channel}"]['GateFactor'] * tiltcorrection
 
     # NOTE: dbdt_std is a fraction, not an actual standard deviation size!
     @property
@@ -134,31 +160,43 @@ class DualMomentTEMXYZSystem(base.XYZSystem):
 
     @property
     def dipole_moments(self):
-        return [self.gex.gex_dict['Channel1']['ApproxDipoleMoment'],
-                self.gex.gex_dict['Channel2']['ApproxDipoleMoment']]
+        return [self.gex.gex_dict[f'Channel{channel}']['ApproxDipoleMoment'] for channel in range(1, 1 + self.gex.number_channels)]
+        # return [self.gex.gex_dict['Channel1']['ApproxDipoleMoment'],
+        #         self.gex.gex_dict['Channel2']['ApproxDipoleMoment']]
         
     @property
     def times_full(self):
-        return (np.array(self.gex.gate_times('Channel1')[:,0]),
-                np.array(self.gex.gate_times('Channel2')[:,0]))    
+        return tuple(np.array(self.gex.gate_times(channel)[:, 0]) for channel in range(1, 1 + self.gex.number_channels))
+        # return (np.array(self.gex.gate_times(1)[:,0]),
+        #         np.array(self.gex.gate_times(2)[:,0]))
 
     @property
     def times_filter(self):        
         times = self.times_full
         filts = [np.zeros(len(t), dtype=bool) for t in times]
-        filts[0][self.gate_filter__start_lm:self.gate_filter__end_lm] = True
-        filts[1][self.gate_filter__start_hm:self.gate_filter__end_hm] = True
+        # FIXME: loop over channel number
+        for channel in range(self.gex.number_channels):
+            filts[channel][self.gate_filter__start[channel]: self.gate_filter__end[channel]] = True
         return filts
-        
-    def make_waveforms(self):
-        time_input_currents_hm = self.waveform_hm[:,0]
-        input_currents_hm = self.waveform_hm[:,1]
-        time_input_currents_lm = self.waveform_lm[:,0]
-        input_currents_lm = self.waveform_lm[:,1]
 
-        waveform_hm = tdem.sources.PiecewiseLinearWaveform(time_input_currents_hm, input_currents_hm)
-        waveform_lm = tdem.sources.PiecewiseLinearWaveform(time_input_currents_lm, input_currents_lm)
-        return waveform_lm, waveform_hm
+    @property
+    def uncertainties__std_data(self):
+        return [self.gex.gex_dict[f'Channel{channel}']['UniformDataSTD'] for channel in range(1, 1 + self.gex.number_channels)]
+
+    @property
+    def uncertainties__std_data_override(self):
+        # "If set to true, use the std_data value instead of data std:s from stacking"
+        return [f"dbdt_std_ch{channel}gt" not in self.xyz.layer_data.keys() for channel in range(1, 1 + self.gex.number_channels)]
+
+    def make_waveforms(self):
+        time_input_currents = []
+        input_currents = []
+        for channel in range(self.gex.number_channels):
+            time_input_currents.append(self.waveform[channel][:,0])
+            input_currents.append(self.waveform[channel][:,1])
+
+        return [tdem.sources.PiecewiseLinearWaveform(time_input_currents[channel], input_currents[channel]) for channel in range(self.gex.number_channels)]
+
     
     def make_system(self, idx, location, times):
         # FIXME: Martin says set z to altitude, not z (subtract topo), original code from seogi doesn't work!
@@ -166,22 +204,12 @@ class DualMomentTEMXYZSystem(base.XYZSystem):
         receiver_location = (location[0] + self.gex.General['RxCoilPosition'][0],
                              location[1],
                              location[2] + np.abs(self.gex.General['RxCoilPosition'][2]))
-        waveform_lm, waveform_hm = self.make_waveforms()        
-
-        return [
-            tdem.sources.MagDipole(
-                [tdem.receivers.PointMagneticFluxTimeDerivative(
-                    receiver_location, times[0], self.rx_orientation)],
-                location=location,
-                waveform=waveform_lm,
-                orientation=self.tx_orientation,
-                i_sounding=idx),
-            tdem.sources.MagDipole(
-                [tdem.receivers.PointMagneticFluxTimeDerivative(
-                    receiver_location, times[1], self.rx_orientation)],
-                location=location,
-                waveform=waveform_hm,
-                orientation=self.tx_orientation,
-                i_sounding=idx)]
-
-    
+        waveforms = self.make_waveforms()
+        return [tdem.sources.MagDipole([tdem.receivers.PointMagneticFluxTimeDerivative(receiver_location,
+                                                                                       times[channel],
+                                                                                       self.rx_orientation[channel])],
+                                       location=location,
+                                       waveform=waveforms[channel],
+                                       orientation=self.tx_orientation,
+                                       i_sounding=idx)
+                for channel in range(self.gex.number_channels)]
